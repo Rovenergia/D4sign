@@ -55,11 +55,12 @@ automática em HTTP 429/5xx.
 
 Confirmado em produção: listar cofres, listar documentos (500 por página, `pg=N`),
 detalhe (`GET /documents/{uuid}`), signatários (`GET /documents/{uuid}/list`),
-download (`{ url, name }`, URL entrega o PDF direto), listar webhooks.
+download (`{ url, name }`, URL entrega o PDF direto), listar webhooks,
+upload (`{ message: "success", uuid }`), cadastro de signatários (`createlist`
+com `{ signers: [...] }`) e envio para assinatura (`sendtosigner`).
 
-Ainda **não** testado em produção (código segue os endpoints informados, resposta
-retornada em JSON bruto): upload, uploadslave, createlist, sendtosigner, registrar
-webhook e o formato do POST do webhook.
+Ainda **não** testado em produção: uploadslave, registrar webhook e o formato do
+POST do webhook.
 
 Obs.: `GET /documents/{uuid}/status` não retorna o status de um documento
 (volta uma lista paginada vazia); o status vem de `GET /documents/{uuid}`.
