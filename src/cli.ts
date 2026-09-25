@@ -3,6 +3,7 @@ import { extname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { runInBatches, type BatchResult } from "./batch.js";
 import { D4SignClient, type D4Document, type NewSigner } from "./client.js";
+import { backupSafe } from "./backup.js";
 import { SAFES, resolveSafe } from "./config.js";
 
 const HELP = `Uso: npm run d4 -- <comando> [opções]
@@ -17,6 +18,12 @@ Extrair informação (somente leitura)
   download <cofre> [--status X] [--search Y] [--limit N] [--out dir]
   download --doc <uuid> [--doc <uuid>...] [--out dir]
   webhook <uuidDoc>                       lista webhooks do documento
+
+Backup em ZIP (incremental, um ZIP por cofre e data)
+  backup <cofre|todos> [--status Finalizado] [--out backups]
+      baixa só documentos ainda não salvos → backups/ROV-Solar-Juridico_AAAA-MM-DD.zip
+      padrão: --status Finalizado; use --status todos para qualquer status
+  backup <cofre|todos> --baseline         marca os atuais como já salvos, sem baixar
 
 Colocar informação (exige --yes)
   upload <cofre> <arquivo|pasta>...       envia PDFs em lotes de 10
@@ -43,6 +50,7 @@ const { values: opt, positionals } = parseArgs({
     "skip-email": { type: "boolean" },
     signers: { type: "boolean" },
     json: { type: "boolean" },
+    baseline: { type: "boolean" },
     yes: { type: "boolean", short: "y" },
     help: { type: "boolean", short: "h" },
   },
@@ -59,8 +67,9 @@ const client = new Proxy({} as D4SignClient, {
 });
 const today = new Date().toISOString().slice(0, 10);
 
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 function filterDocs(docs: D4Document[]): D4Document[] {
-  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   let out = docs;
   if (opt.status) out = out.filter((d) => norm(d.statusName) === norm(opt.status!) || d.statusId === opt.status);
   if (opt.search) out = out.filter((d) => norm(d.nameDoc).includes(norm(opt.search!)));
@@ -186,6 +195,23 @@ async function main() {
         { label: "download" },
       );
       report(res, (d) => d.nameDoc);
+      return;
+    }
+
+    case "backup": {
+      const targets = args[0] === "todos" ? [...SAFES] : [resolveSafe(args[0])];
+      const status = opt.status ?? "Finalizado";
+      const statuses = norm(status) === "todos" ? [] : [status];
+      let failures = 0;
+      for (const safe of targets) {
+        const r = await backupSafe(client, safe, { out: opt.out ?? "backups", statuses, baseline: opt.baseline });
+        if (!r.pending) console.log(`${r.safe}: nada novo.`);
+        else if (opt.baseline) console.log(`${r.safe}: ${r.saved} documento(s) marcados como já salvos.`);
+        else console.log(`${r.safe}: ${r.saved}/${r.pending} salvos → ${r.zip}`);
+        for (const f of r.failed) console.log(`  ✗ ${f.doc.nameDoc}: ${f.error}`);
+        failures += r.failed.length;
+      }
+      if (failures) process.exitCode = 1;
       return;
     }
 

@@ -162,13 +162,18 @@ export class D4SignClient {
     return this.request("POST", `/documents/${uuidDoc}/download`, { json: { type, language: "pt" } });
   }
 
-  async downloadTo(uuidDoc: string, dest: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<string> {
+  async downloadBuffer(uuidDoc: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<Buffer> {
     const { url } = await this.getDownloadUrl(uuidDoc, type, verified);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Download ${uuidDoc}: HTTP ${res.status}`);
-    await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async downloadTo(uuidDoc: string, dest: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<string> {
+    await writeFile(dest, await this.downloadBuffer(uuidDoc, type, verified));
     return dest;
   }
+
 
   async listWebhooks(uuidDoc: string): Promise<unknown> {
     await this.getDocument(uuidDoc);

@@ -46,6 +46,19 @@ npm run d4 -- webhook <uuidDoc> https://meu-servidor/d4sign --yes
 Operações em lote rodam em grupos de 10 com pausa entre lotes e nova tentativa
 automática em HTTP 429/5xx.
 
+## Backup em ZIP por cofre e data
+
+```bash
+npm run d4 -- backup todos --baseline   # 1ª vez: marca o que já existe como salvo (opcional)
+npm run d4 -- backup todos              # baixa só o que é novo
+npm run d4 -- backup juridico --status todos --out /caminho/backups
+```
+
+Gera `backups/ROV-Solar-Juridico_2026-09-25.zip` (um por cofre e data; `_2`, `_3`
+se rodar mais de uma vez no dia), com os PDFs e um `manifesto.csv`. Por padrão só
+entram documentos **Finalizados**. O que já foi salvo fica em `backups/state.json`
+e não é baixado de novo; falhas são tentadas outra vez na próxima execução.
+
 ## Webhook
 
 `npm run webhook` sobe um receptor em `:3000` (ou `PORT`) que grava cada POST em

@@ -13,14 +13,14 @@ export type BatchResult<T, R> =
 export async function runInBatches<T, R>(
   items: T[],
   fn: (item: T) => Promise<R>,
-  { size = BATCH_SIZE, pauseMs = BATCH_PAUSE_MS, label = "item" } = {},
+  { size = BATCH_SIZE, pauseMs = BATCH_PAUSE_MS, label = "item", quiet = false } = {},
 ): Promise<BatchResult<T, R>[]> {
   const results: BatchResult<T, R>[] = [];
   for (let i = 0; i < items.length; i += size) {
     const chunk = items.slice(i, i + size);
     const n = Math.floor(i / size) + 1;
     const total = Math.ceil(items.length / size);
-    console.error(`Lote ${n}/${total} (${chunk.length} ${label}s)`);
+    if (!quiet) console.error(`Lote ${n}/${total} (${chunk.length} ${label}s)`);
     const settled = await Promise.allSettled(chunk.map(fn));
     settled.forEach((s, j) => {
       const item = chunk[j];
