@@ -1,6 +1,6 @@
 import { openAsBlob } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, extname } from "node:path";
 import { sleep } from "./batch.js";
 import { BASE_URL, MAX_RETRIES, credentials, isAllowedSafe, resolveSafe } from "./config.js";
 
@@ -162,13 +162,18 @@ export class D4SignClient {
     return this.request("POST", `/documents/${uuidDoc}/download`, { json: { type, language: "pt" } });
   }
 
-  async downloadTo(uuidDoc: string, dest: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<string> {
+  async downloadBuffer(uuidDoc: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<Buffer> {
     const { url } = await this.getDownloadUrl(uuidDoc, type, verified);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Download ${uuidDoc}: HTTP ${res.status}`);
-    await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async downloadTo(uuidDoc: string, dest: string, type: "PDF" | "ZIP" = "PDF", verified = false): Promise<string> {
+    await writeFile(dest, await this.downloadBuffer(uuidDoc, type, verified));
     return dest;
   }
+
 
   async listWebhooks(uuidDoc: string): Promise<unknown> {
     await this.getDocument(uuidDoc);
@@ -180,15 +185,13 @@ export class D4SignClient {
 
   async upload(safe: string, filePath: string): Promise<unknown> {
     const { uuid } = resolveSafe(safe);
-    const form = new FormData();
-    form.append("file", await openAsBlob(filePath), basename(filePath));
+    const form = await fileForm(filePath);
     return this.request("POST", `/documents/${uuid}/upload`, { form });
   }
 
   async uploadSlave(uuidDoc: string, filePath: string): Promise<unknown> {
     await this.getDocument(uuidDoc);
-    const form = new FormData();
-    form.append("file", await openAsBlob(filePath), basename(filePath));
+    const form = await fileForm(filePath);
     return this.request("POST", `/documents/${uuidDoc}/uploadslave`, { form });
   }
 
@@ -219,6 +222,24 @@ export class D4SignClient {
     await this.getDocument(uuidDoc);
     return this.request("POST", `/documents/${uuidDoc}/webhooks`, { json: { url } });
   }
+}
+
+const MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
+
+/** A D4Sign rejeita o arquivo sem Content-Type ("File extension not allowed application/octet-stream"). */
+async function fileForm(filePath: string): Promise<FormData> {
+  const type = MIME[extname(filePath).toLowerCase()];
+  if (!type) throw new Error(`Tipo de arquivo não suportado: ${basename(filePath)}`);
+  const form = new FormData();
+  form.append("file", await openAsBlob(filePath, { type }), basename(filePath));
+  return form;
 }
 
 function backoff(attempt: number): number {
